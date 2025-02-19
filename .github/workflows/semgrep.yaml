@@ -1,0 +1,33 @@
+name: Semgrep
+on: [ pull_request ]
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Semgrep
+        run: pipx install semgrep
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v45
+        with:
+          files_ignore: |
+            **/tests/**
+            **/conftest.py
+
+      - name: Run Semgrep on changed files
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          semgrep scan \
+                  --config auto \
+                  --json \
+                  ${{ steps.changed-files.outputs.all_changed_files }} \
+                  > results.json
+
+      - name: Parse Semgrep results and create annotations
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: python .github/scripts/parse_semgrep.py results.json --fail-on ERROR

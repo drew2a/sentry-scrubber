@@ -1,0 +1,52 @@
+name: pytest
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  run_pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.12.7'
+          cache: 'poetry'
+
+      - run: poetry install --no-interaction --no-ansi
+
+      - name: Run Tests
+        run: |
+          poetry run pytest \
+            --cov \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            ${{ inputs.pytest_arguments }}
+
+      - name: Compare coverage (optional)
+        if: ${{ inputs.check_coverage_diff == true && github.event_name == 'pull_request' }}
+        run: |
+          poetry run diff-cover coverage.xml \
+            --compare-branch=origin/main \
+            --json-report=diff_coverage.json \
+            --fail-under=80
+
+      - name: Annotate uncovered lines (optional)
+        if: ${{ always() && inputs.check_coverage_diff == true && github.event_name == 'pull_request' }}
+        run: |
+          if [ -f "diff_coverage.json" ]; then
+            python .github/scripts/annotate_coverage.py diff_coverage.json
+          else
+            echo "diff_coverage.json not found. Skipping annotation step."
+          fi

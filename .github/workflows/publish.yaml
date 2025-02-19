@@ -1,0 +1,25 @@
+name: Publish Python Package
+
+on:
+  release:
+    types: [ published ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: pipx install poetry
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.12.7'
+          cache: 'poetry'
+
+      - name: Build and publish
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          poetry config pypi-token.pypi $PYPI_API_TOKEN
+          poetry publish --build
