@@ -1,4 +1,4 @@
-name: pytest
+name: Pytest
 
 on:
   push:
@@ -35,18 +35,15 @@ jobs:
             ${{ inputs.pytest_arguments }}
 
       - name: Compare coverage (optional)
-        if: ${{ inputs.check_coverage_diff == true && github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' }}
         run: |
           poetry run diff-cover coverage.xml \
             --compare-branch=origin/main \
             --json-report=diff_coverage.json \
             --fail-under=80
 
-      - name: Annotate uncovered lines (optional)
-        if: ${{ always() && inputs.check_coverage_diff == true && github.event_name == 'pull_request' }}
-        run: |
-          if [ -f "diff_coverage.json" ]; then
-            python .github/scripts/annotate_coverage.py diff_coverage.json
-          else
-            echo "diff_coverage.json not found. Skipping annotation step."
-          fi
+      - name: Annotate uncovered lines
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        uses: drew2a/annotate-coverage-action@v1
+        with:
+          json_path: "diff_coverage.json"
