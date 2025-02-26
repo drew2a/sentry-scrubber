@@ -11,12 +11,12 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+documentation = "https://github.com/drew2a/sentry-scrubber/blob/main/README.md"
 
 [tool.pytest.ini_options]
 pythonpath = [
     "sentry_scrubber", "."
 ]
-
 
 [tool.poetry.dependencies]
 python = "^3.9.17"
