@@ -108,6 +108,34 @@ def test_scrub_path_negative_match(scrubber: SentryScrubber):
     assert not scrubber.sensitive_occurrences
 
 
+def test_dict_markers_to_scrub(scrubber: SentryScrubber):
+    scrubber.dict_markers_to_scrub = {'marker': 'top secret'}
+
+    event = {
+        'not secret information': 'any',
+        'suspicious': {
+            'information': 'but not secret',
+            'just contains': 'top secret',
+        },
+        'secret information': {
+            'marker': 'top secret',
+            'any': 'information',
+        }
+    }
+
+    actual = scrubber.scrub_event(event)
+    expected = {
+        'not secret information': 'any',
+        'suspicious': {
+            'information': 'but not secret',
+            'just contains': 'top secret'
+        },
+        'secret information': {}
+    }
+
+    assert actual == expected
+
+
 def test_scrub_path_positive_match(scrubber: SentryScrubber):
     """ Test that the scrubber scrubs paths """
     assert scrubber.scrub_text('/users/user/apps') == '/users/<boot>/apps'
@@ -283,7 +311,7 @@ def test_scrub_unnecessary_fields(scrubber):
 
     # custom
     custom_scrubber = SentryScrubber()
-    custom_scrubber.event_fields_to_cut = ['new', 'default']
+    custom_scrubber.event_fields_to_cut = {'new', 'default'}
     assert custom_scrubber.scrub_event({'default': 'event', 'new': 'field', 'modules': {}}) == {'modules': {}}
 
 
