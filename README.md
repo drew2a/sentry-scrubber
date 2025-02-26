@@ -289,6 +289,7 @@ dict_markers_to_scrub: Optional[dict] = None,
 exclusions: Optional[set] = None,
 scrub_ip: bool = True,
 scrub_hash: bool = True,
+scrub_folders: bool = True,
 )
 ```
 
@@ -306,3 +307,7 @@ scrub_hash: bool = True,
 - `dict_markers_to_scrub`: Dictionary of markers that indicate sections to be redacted
 - `event_fields_to_cut`: Set of fields to remove from events
 - `exclusions`: Set of values to exclude from scrubbing
+- `scrub_ip`: Flag to enable or disable IP scrubbing. Defaults to True.
+- `scrub_hash`: Flag to enable or disable hash scrubbing. Defaults to True.
+- `scrub_folders`: Flag to enable or disable folder scrubbing. Defaults to True.
+            

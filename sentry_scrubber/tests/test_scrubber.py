@@ -167,6 +167,15 @@ def test_scrub_text_ip_positive_match(scrubber: SentryScrubber):
     assert not sensitive_occurrences
 
 
+def test_scrub_text_ip_positive_match_disabled():
+    """ Test that the scrubber does not scrub IPs """
+    s = SentryScrubber(scrub_ip=False)
+    sensitive_occurrences = set()
+
+    assert s.scrub_text('0.0.0.1', sensitive_occurrences) == '0.0.0.1'
+    assert not sensitive_occurrences
+
+
 def test_scrub_text_hash_negative_match(scrubber: SentryScrubber):
     """ Test that the scrubber does not scrub hashes """
     sensitive_occurrences = set()
@@ -175,6 +184,23 @@ def test_scrub_text_hash_negative_match(scrubber: SentryScrubber):
     assert scrubber.scrub_text(too_long_hash, sensitive_occurrences) == too_long_hash
     too_short_hash = '2' * 39
     assert scrubber.scrub_text(too_short_hash, sensitive_occurrences) == too_short_hash
+
+
+def test_scrub_text_hash_negative_match_disabled(scrubber: SentryScrubber):
+    """ Test that the scrubber does not scrub hashes """
+    sensitive_occurrences = set()
+    s = SentryScrubber(scrub_hash=False)
+    hash_text = '3030303030303030303030303030303030303030'
+    assert s.scrub_text(hash_text, sensitive_occurrences) == hash_text
+    assert not sensitive_occurrences
+
+
+def test_folders_disabled():
+    """ Test that the scrubber does not scrub folders """
+    sensitive_occurrences = set()
+    s = SentryScrubber(scrub_folders=False)
+    assert s.scrub_text('usr/someuser/path', sensitive_occurrences) == 'usr/someuser/path'
+    assert not sensitive_occurrences
 
 
 def test_scrub_text_hash_positive_match(scrubber: SentryScrubber):
