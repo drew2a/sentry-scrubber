@@ -1,0 +1,20 @@
+name: AI Review
+on: [ pull_request ]
+permissions:
+  pull-requests: write
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: drew2a/ai-review@v1
+        with:
+          api_endpoint: ${{ secrets.ANTHROPIC_LLM_ENDPOINT }}
+          api_key: ${{ secrets.ANTHROPIC_LLM_API_KEY }}
+          api_version: ${{ secrets.ANTHROPIC_LLM_API_VERSION }}
+          llm_model: ${{ secrets.ANTHROPIC_LLM_MODEL }}
+
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+          add_review_resolution: true
