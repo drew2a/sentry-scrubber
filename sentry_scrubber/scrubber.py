@@ -36,6 +36,7 @@ class SentryScrubber:
             exclusions: Optional[set] = None,
             scrub_ip: bool = True,
             scrub_hash: bool = True,
+            scrub_folders: bool = True,
     ):
         """
         Initializes the SentryScrubber with configurable parameters.
@@ -47,16 +48,21 @@ class SentryScrubber:
             exclusions (Optional[set]): Set of values to exclude from scrubbing.
             scrub_ip (bool): Flag to enable or disable IP scrubbing. Defaults to True.
             scrub_hash (bool): Flag to enable or disable hash scrubbing. Defaults to True.
+            scrub_folders (bool): Flag to enable or disable folder scrubbing. Defaults to True.
 
         Example:
             >>> scrubber = SentryScrubber(scrub_ip=False)
             >>> scrubbed_event = scrubber.scrub_event(event)
         """
-        self.home_folders = home_folders or DEFAULT_HOME_FOLDERS
-        self.dict_keys_for_scrub = dict_keys_for_scrub or DEFAULT_KEYS_FOR_SCRUB
+        self.home_folders = DEFAULT_HOME_FOLDERS if home_folders is None else home_folders
+        if not scrub_folders:
+            self.home_folders = set()
+
+        self.dict_keys_for_scrub = DEFAULT_KEYS_FOR_SCRUB if dict_keys_for_scrub is None else dict_keys_for_scrub
         self.dict_markers_to_scrub = dict_markers_to_scrub or {}
         self.event_fields_to_cut = set()
-        self.exclusions = exclusions or DEFAULT_EXCLUSIONS
+        self.exclusions = DEFAULT_EXCLUSIONS if exclusions is None else exclusions
+
         self.scrub_ip = scrub_ip
         self.scrub_hash = scrub_hash
         self.placeholder = '<redacted>'
