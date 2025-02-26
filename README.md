@@ -1,19 +1,21 @@
-# Sentry Scrubber Cookbook
+# Sentry Scrubber
+
+A lightweight Python library designed to protect sensitive information in Sentry events.
 
 ## Introduction
 
-`sentry-scrubber` is a lightweight Python library designed to protect sensitive information in Sentry events. This
-cookbook provides practical examples and recipes for using the library effectively in your applications.
+`sentry-scrubber` is a lightweight Python library designed to protect sensitive information in Sentry events. It
+automatically detects and scrubs usernames, IP addresses, file paths, and other potentially sensitive data before events
+are sent to Sentry.
 
 ## Table of Contents
 
 1. [Installation](#installation)
 2. [Basic Usage](#basic-usage)
 3. [Configuration Options](#configuration-options)
-4. [Advanced Scrubbing Techniques](#advanced-scrubbing-techniques)
-5. [Integration Patterns](#integration-patterns)
-6. [Troubleshooting](#troubleshooting)
-7. [Best Practices](#best-practices)
+4. [Integration with Sentry](#integration-with-sentry)
+5. [Advanced Usage](#advanced-usage)
+6. [API Reference](#api-reference)
 
 ## Installation
 
@@ -27,7 +29,7 @@ pip install sentry-scrubber
 
 ```python
 import sentry_sdk
-from scrubber import SentryScrubber
+from sentry_scrubber.scrubber import SentryScrubber
 
 # Create a scrubber with default settings
 scrubber = SentryScrubber()
@@ -42,7 +44,7 @@ sentry_sdk.init(
 ### Scrubbing Individual Events
 
 ```python
-from scrubber import SentryScrubber
+from sentry_scrubber.scrubber import SentryScrubber
 
 # Create a scrubber instance
 scrubber = SentryScrubber()
@@ -67,22 +69,24 @@ event = {
 # Scrub the event
 scrubbed_event = scrubber.scrub_event(event)
 print(scrubbed_event)
-# Result: {'user': {'username': '<oven>'}, 'server_name': '<shoulder>', 'contexts': {'os': {'home_dir': '/Users/<oven>/Documents'}}, 'request': {'url': 'https://api.example.com/users/<oven>', 'env': {'SERVER_ADDR': '<IP>'}}}
+# Result: {'user': {'username': '<redacted>'}, 'server_name': '<redacted>', 'contexts': {'os': {'home_dir': '/Users/<redacted>/Documents'}}, 'request': {'url': 'https://api.example.com/users/<redacted>', 'env': {'SERVER_ADDR': '<redacted>'}}}
 ```
 
 ### Scrubbing Text
 
 ```python
-from scrubber import SentryScrubber
+from sentry_scrubber.scrubber import SentryScrubber
 
 scrubber = SentryScrubber()
+sensitive_occurrences = set()
 
 # Example text with sensitive information
 text = "Error in file /home/username/app/main.py at line 42, reported from 192.168.1.1"
 
 # Scrub the text
-scrubbed_text = scrubber.scrub_text(text)
-print(scrubbed_text)  # "Error in file /home/<placeholder>/app/main.py at line 42, reported from <IP>"
+scrubbed_text = scrubber.scrub_text(text, sensitive_occurrences)
+print(scrubbed_text)  # "Error in file /home/<redacted>/app/main.py at line 42, reported from <redacted>"
+print(sensitive_occurrences)  # {'username'}
 ```
 
 ## Configuration Options
@@ -90,7 +94,7 @@ print(scrubbed_text)  # "Error in file /home/<placeholder>/app/main.py at line 4
 ### Custom Home Folders
 
 ```python
-from scrubber import SentryScrubber
+from sentry_scrubber.scrubber import SentryScrubber
 
 # Define custom home folders to detect usernames
 custom_home_folders = {
@@ -106,7 +110,7 @@ scrubber = SentryScrubber(home_folders=custom_home_folders)
 ### Sensitive Dictionary Keys
 
 ```python
-from scrubber import SentryScrubber
+from sentry_scrubber.scrubber import SentryScrubber
 
 # Define custom keys to scrub
 custom_keys = {
@@ -125,11 +129,10 @@ scrubber = SentryScrubber(dict_keys_for_scrub=custom_keys)
 ### Dictionary Markers for Removal
 
 ```python
-from scrubber import SentryScrubber
+from sentry_scrubber.scrubber import SentryScrubber
 
 # Define markers that indicate sections to be removed
 dict_markers = {
-    'security_level': 'confidential',
     'visibility': 'private'
 }
 
@@ -139,13 +142,13 @@ scrubber = SentryScrubber(dict_markers_to_scrub=dict_markers)
 event = {
     'public_info': 'This is public',
     'private_section': {
-        'visibility': 'private',  # This will cause the entire 'private_section' to be emptied
+        'visibility': 'private',  # This will cause the entire 'private_section' to be redacted
         'secret_data': 'sensitive information'
     }
 }
 
 scrubbed = scrubber.scrub_event(event)
-# Result: {'public_info': 'This is public', 'private_section': {}}
+# Result: {'public_info': 'This is public', 'private_section': '<redacted>'}
 ```
 
 ### Exclusions
@@ -202,23 +205,22 @@ from scrubber import SentryScrubber
 scrubber = SentryScrubber()
 
 # Manually add sensitive information and corresponding placeholders
-scrubber.add_sensitive_pair("john_doe", "<username>")
-scrubber.add_sensitive_pair("secret_token_123", "<token>")
+scrubber.sensitive_strings.add({"john_doe", "secret_token_123"})
 
 # Now any instance of these strings will be replaced in subsequent scrubs
 text = "User john_doe used secret_token_123 to authenticate"
 scrubbed = scrubber.scrub_text(text)
-# Result: "User <username> used <token> to authenticate"
+# Result: "User <redacted> used <redacted> to authenticate"
 ```
 
-## Integration Patterns
+## Integration with Sentry
 
-### Integration with Django
+### Django Integration
 
 ```python
 # settings.py
 import sentry_sdk
-from scrubber import SentryScrubber
+from sentry_scrubber.scrubber import SentryScrubber
 from sentry_sdk.integrations.django import DjangoIntegration
 
 scrubber = SentryScrubber(
@@ -233,12 +235,12 @@ sentry_sdk.init(
 )
 ```
 
-### Integration with Flask
+### Flask Integration
 
 ```python
 # app.py
 import sentry_sdk
-from scrubber import SentryScrubber
+from sentry_scrubber.scrubber import SentryScrubber
 from sentry_sdk.integrations.flask import FlaskIntegration
 from flask import Flask
 
@@ -255,124 +257,52 @@ sentry_sdk.init(
 app = Flask(__name__)
 ```
 
-### Integration with Celery
+### FastAPI Integration
 
 ```python
-# celery_config.py
+# main.py
 import sentry_sdk
-from scrubber import SentryScrubber
-from sentry_sdk.integrations.celery import CeleryIntegration
+from sentry_scrubber.scrubber import SentryScrubber
+from fastapi import FastAPI
 
+# Initialize scrubber
 scrubber = SentryScrubber()
 
+# Initialize Sentry
 sentry_sdk.init(
     dsn="https://your-dsn@sentry.io/project",
-    integrations=[CeleryIntegration()],
     before_send=scrubber.scrub_event
 )
+
+app = FastAPI()
 ```
 
-## Troubleshooting
+## API Reference
 
-### Debug Scrubbing Patterns
-
-```python
-from scrubber import SentryScrubber
-
-scrubber = SentryScrubber()
-
-# Print the compiled regular expressions for debugging
-print("Folder patterns:")
-for pattern in scrubber.re_folders:
-    print(f" - {pattern.pattern}")
-
-print(f"IP pattern: {scrubber.re_ip.pattern if scrubber.re_ip else 'disabled'}")
-print(f"Hash pattern: {scrubber.re_hash.pattern if scrubber.re_hash else 'disabled'}")
-```
-
-### Inspect Sensitive Occurrences
+### SentryScrubber
 
 ```python
-from scrubber import SentryScrubber
-
-scrubber = SentryScrubber()
-
-# Scrub some text
-scrubber.scrub_text("/home/john_doe/app.log")
-scrubber.scrub_text("Username: john_doe")
-
-# Inspect what was found and stored
-print("Sensitive information detected:")
-for original, placeholder in scrubber.sensitive_occurrences.items():
-    print(f" - '{original}' → '{placeholder}'")
-```
-
-### Test Scrubbing with Real-world Examples
-
-```python
-from scrubber import SentryScrubber
-
-scrubber = SentryScrubber()
-
-# Sample stack trace with sensitive information
-stack_trace = """
-Traceback (most recent call last):
-  File "/Users/john_doe/myapp/main.py", line 42, in handle_request
-    response = api_client.request(url, headers={'Authorization': 'Bearer abc123def456'})
-  File "/Users/john_doe/myapp/api.py", line 15, in request
-    return requests.get(url, headers=headers, timeout=10)
-ConnectionError: Failed to connect to 192.168.1.100:8080
-"""
-
-scrubbed = scrubber.scrub_text(stack_trace)
-print(scrubbed)
-```
-
-## Best Practices
-
-### 1. Custom Scrubbing for Domain-specific Data
-
-Extend the SentryScrubber class to handle domain-specific sensitive data:
-
-```python
-from scrubber import SentryScrubber
-import re
-
-
-class MedicalScrubber(SentryScrubber):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # Add pattern for medical record numbers (example pattern)
-        self.re_mrn = re.compile(r'MRN-\d{6}', re.I)
-
-    def scrub_text(self, text):
-        # First use the parent implementation
-        text = super().scrub_text(text)
-
-        # Then apply custom scrubbing
-        if self.re_mrn and text:
-            text = self.re_mrn.sub('<MEDICAL-RECORD-NUMBER>', text)
-
-        return text
-```
-
-### 2. Balance Performance and Protection
-
-For high-volume applications, consider optimizing scrubbing rules:
-
-```python
-from scrubber import SentryScrubber
-
-# Create a minimal scrubber that only handles the most critical information
-minimal_scrubber = SentryScrubber(
-    # Only include essential home folders
-    home_folders={'home', 'users', 'Documents and Settings'},
-
-    # Only include critical keys
-    dict_keys_for_scrub={'USERNAME', 'password', 'api_key'},
-
-    # Disable hash scrubbing if not needed
-    scrub_hash=False
+SentryScrubber(
+    home_folders: Optional[set] = None,
+dict_keys_for_scrub: Optional[set] = None,
+dict_markers_to_scrub: Optional[dict] = None,
+exclusions: Optional[set] = None,
+scrub_ip: bool = True,
+scrub_hash: bool = True,
 )
 ```
+
+#### Methods
+
+- `scrub_event(event: Optional[Dict[str, Any]], _=None) -> Optional[Dict[str, Any]]`: Scrubs a Sentry event
+- `scrub_text(text: Optional[str], sensitive_occurrences: Set[str]) -> Optional[str]`: Scrubs sensitive information from
+  text
+- `scrub_entity_recursively(entity, sensitive_strings: set, depth=10)`: Recursively scrubs an entity
+
+#### Properties
+
+- `home_folders`: Set of folder names used to identify usernames in paths
+- `dict_keys_for_scrub`: Set of dictionary keys whose values should be scrubbed
+- `dict_markers_to_scrub`: Dictionary of markers that indicate sections to be redacted
+- `event_fields_to_cut`: Set of fields to remove from events
+- `exclusions`: Set of values to exclude from scrubbing

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sentry-scrubber"
-version = "1.0.0"
+version = "2.0.0"
 description = "A lightweight and flexible Python library for scrubbing sensitive information from Sentry events before they are sent to the server."
 authors = ["Andrei Andreev"]
 readme = "README.md"
@@ -20,7 +20,6 @@ pythonpath = [
 
 [tool.poetry.dependencies]
 python = "^3.9.17"
-faker = "^36.1.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.3"

@@ -4,11 +4,6 @@ simplify work with several data structures.
 import re
 from typing import Any, Callable, Dict, List, Optional, TypeVar
 
-from faker import Faker
-
-# Remove the substring like "Sentry is attempting to send 1 pending error messages"
-_re_remove_sentry = re.compile(r'Sentry is attempting.*')
-
 
 def get_first_item(items, default=None):
     return items[0] if items else default
@@ -75,16 +70,6 @@ def distinct_by(items: Optional[List[T]], getter: Callable[[T], Any]) -> Optiona
         if key not in distinct:
             distinct[key] = item
     return list(distinct.values())
-
-
-def obfuscate_string(s: str, part_of_speech: str = 'noun') -> str:
-    """Obfuscate string by replacing it with random word.
-
-    The same random words will be generated for the same given strings.
-    """
-    faker = Faker(locale='en_US')
-    faker.seed_instance(s)
-    return faker.word(part_of_speech=part_of_speech)
 
 
 def order_by_utc_time(breadcrumbs: Optional[List[Dict]], key: str = 'timestamp'):

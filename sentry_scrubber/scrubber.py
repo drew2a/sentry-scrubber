@@ -1,11 +1,13 @@
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Set, TypeVar, Union
 
-from sentry_scrubber.utils import delete_item, obfuscate_string
+from sentry_scrubber.utils import delete_item
+
+T = TypeVar('T')
 
 DEFAULT_EXCLUSIONS = {'local', '127.0.0.1'}
 
-DEFAULT_KEYS_FOR_SCRUB = {'USERNAME', 'USERDOMAIN', 'server_name', 'COMPUTERNAME', 'key'}
+DEFAULT_KEYS_FOR_SCRUB = {'USERNAME', 'USERDOMAIN', 'server_name', 'COMPUTERNAME'}
 
 # https://en.wikipedia.org/wiki/Home_directory
 DEFAULT_HOME_FOLDERS = {
@@ -57,19 +59,14 @@ class SentryScrubber:
         self.exclusions = exclusions or DEFAULT_EXCLUSIONS
         self.scrub_ip = scrub_ip
         self.scrub_hash = scrub_hash
+        self.placeholder = '<redacted>'
 
-        # this is the dict (key: sensitive_info, value: placeholder)
-        self.sensitive_occurrences = {}
-
-        # placeholders
-        self.create_placeholder = lambda text: f'<{text}>'
-        self.hash_placeholder = self.create_placeholder('hash')
-        self.ip_placeholder = self.create_placeholder('IP')
+        self.sensitive_strings = set()
 
         # compiled regular expressions
-        self.re_folders = set()
-        self.re_ip = None
-        self.re_hash = None
+        self._re_folders = set()
+        self._re_ip = None
+        self._re_hash = None
 
         self._compile_re()
 
@@ -90,14 +87,14 @@ class SentryScrubber:
         for folder in self.home_folders:
             for separator in [slash, slash * 2]:
                 folder_pattern = rf'(?<={folder}{separator})[\w\s~]+(?={separator})'
-                self.re_folders.add(re.compile(folder_pattern, re.I))
+                self._re_folders.add(re.compile(folder_pattern, re.I))
 
         if self.scrub_ip:
-            self.re_ip = re.compile(r'(?<!\.)\b(\d{1,3}\.){3}\d{1,3}\b(?!\.)', re.I)
+            self._re_ip = re.compile(r'(?<!\.)\b(\d{1,3}\.){3}\d{1,3}\b(?!\.)', re.I)
         if self.scrub_hash:
-            self.re_hash = re.compile(r'\b[0-9a-f]{40}\b', re.I)
+            self._re_hash = re.compile(r'\b[0-9a-f]{40}\b', re.I)
 
-    def scrub_event(self, event, _=None):
+    def scrub_event(self, event: Optional[Dict[str, Any]], _=None) -> Optional[Dict[str, Any]]:
         """
         Main method to scrub a Sentry event by removing sensitive and unnecessary information.
 
@@ -120,15 +117,17 @@ class SentryScrubber:
             delete_item(event, field_name)
 
         # remove sensitive information
-        scrubbed_event = self.scrub_entity_recursively(event)
+        sensitive_strings = set(self.sensitive_strings)
+
+        scrubbed_event = self.scrub_entity_recursively(event, sensitive_strings)
 
         # this second call is necessary to complete the entities scrubbing
         # which were found at the end of the previous call
-        scrubbed_event = self.scrub_entity_recursively(scrubbed_event)
+        scrubbed_event = self.scrub_entity_recursively(scrubbed_event, sensitive_strings)
 
         return scrubbed_event
 
-    def scrub_text(self, text):
+    def scrub_text(self, text: Optional[str], sensitive_occurrences: Set[str]) -> Optional[str]:
         """
         Replaces all sensitive information in the given text with corresponding placeholders.
 
@@ -139,6 +138,7 @@ class SentryScrubber:
 
         Args:
             text (str): The text to scrub.
+            sensitive_occurrences (set): A set to store all sensitive occurrences.
 
         Returns:
             str: The scrubbed text.
@@ -156,40 +156,36 @@ class SentryScrubber:
             user_name = m.group(0)
             if user_name in self.exclusions:
                 return user_name
-            fake_username = obfuscate_string(user_name)
-            placeholder = self.create_placeholder(fake_username)
-            self.add_sensitive_pair(user_name, placeholder)
-            return placeholder
+            sensitive_occurrences.add(user_name)
+            return self.placeholder
 
-        for regex in self.re_folders:
+        for regex in self._re_folders:
             text = regex.sub(scrub_username, text)
 
-        if self.scrub_ip and self.re_ip:
-            # cut an IP
+        if self.scrub_ip and self._re_ip:
             def scrub_ip(m):
-                return self.ip_placeholder if m.group(0) not in self.exclusions else m.group(0)
+                return self.placeholder if m.group(0) not in self.exclusions else m.group(0)
 
-            text = self.re_ip.sub(scrub_ip, text)
+            text = self._re_ip.sub(scrub_ip, text)
 
-        if self.scrub_hash and self.re_hash:
-            # cut hash
-            text = self.re_hash.sub(self.hash_placeholder, text)
+        if self.scrub_hash and self._re_hash:
+            text = self._re_hash.sub(self.placeholder, text)
 
         # replace all sensitive occurrences in the whole string
-        if self.sensitive_occurrences:
-            escaped_sensitive_occurrences = [re.escape(user_name) for user_name in self.sensitive_occurrences]
+        if sensitive_occurrences:
+            escaped_sensitive_occurrences = (re.escape(user_name) for user_name in sensitive_occurrences)
             pattern = r'([^<]|^)\b(' + '|'.join(escaped_sensitive_occurrences) + r')\b'
 
             def scrub_value(m):
-                if m.group(2) not in self.sensitive_occurrences:
+                if m.group(2) not in sensitive_occurrences:
                     return m.group(0)
-                return m.group(1) + self.sensitive_occurrences[m.group(2)]
+                return m.group(1) + self.placeholder
 
             text = re.sub(pattern, scrub_value, text)
 
         return text
 
-    def scrub_entity_recursively(self, entity: Union[str, Dict, List, Any], depth=10):
+    def scrub_entity_recursively(self, entity: Union[str, Dict, List, Any], sensitive_strings: set, depth=10):
         """
         Recursively traverses an entity to remove all sensitive information.
 
@@ -202,6 +198,7 @@ class SentryScrubber:
 
         Args:
             entity (Union[str, Dict, List, Any]): The entity to scrub.
+            sensitive_strings (set): A set to store all sensitive string occurrences.
             depth (int, optional): The recursion depth limit. Defaults to 10.
 
         Returns:
@@ -209,55 +206,46 @@ class SentryScrubber:
 
         Example:
             >>> scrubber = SentryScrubber()
-            >>> scrubbed = scrubber.scrub_entity_recursively(event_dict)
+            >>> sensitive_strings = set()
+            >>> scrubbed = scrubber.scrub_entity_recursively(event_dict, sensitive_strings)
         """
         if depth < 0 or not entity:
+            # Base case: If depth exceeds limit or entity is empty, return it as is
             return entity
 
         depth -= 1
 
         if isinstance(entity, str):
-            return self.scrub_text(entity)
-
-        if isinstance(entity, list):
-            return [self.scrub_entity_recursively(item, depth) for item in entity]
+            # If the entity is a string, scrub it directly
+            return self.scrub_text(entity, sensitive_strings)
 
         if isinstance(entity, dict):
+            # If the entity is a dictionary, scrub each key-value pair
             result = {}
             for key, value in entity.items():
+                if not value:  # If the value is empty or None, retain it without scrubbing
+                    result[key] = value
+                    continue
+
                 if marker_value := self.dict_markers_to_scrub.get(key):
-                    if value == marker_value:
-                        result = {}
+                    should_be_scrubbed = value == marker_value
+                    if should_be_scrubbed:
+                        result = self.placeholder
                         break
 
-                if key in self.dict_keys_for_scrub and isinstance(value, str):
-                    value = value.strip()
-                    fake_value = obfuscate_string(value)
-                    placeholder = self.create_placeholder(fake_value)
-                    self.add_sensitive_pair(value, placeholder)
-                    result[key] = placeholder
+                if key in self.dict_keys_for_scrub:
+                    if isinstance(value, str):
+                        if non_empty := value.strip():
+                            sensitive_strings.add(non_empty)
+
+                    result[key] = self.placeholder
                 else:
-                    result[key] = self.scrub_entity_recursively(value, depth)
+                    result[key] = self.scrub_entity_recursively(value, sensitive_strings, depth)
             return result
 
+        if isinstance(entity, list):
+            return [self.scrub_entity_recursively(item, sensitive_strings, depth) for item in entity]
+        if isinstance(entity, tuple):
+            return tuple(self.scrub_entity_recursively(item, sensitive_strings, depth) for item in entity)
+
         return entity
-
-    def add_sensitive_pair(self, text, placeholder):
-        """
-        Adds a sensitive text and its corresponding placeholder to the occurrences dictionary.
-
-        Args:
-            text (str): The sensitive text to be replaced.
-            placeholder (str): The placeholder to replace the sensitive text.
-
-        Example:
-            >>> scrubber = SentryScrubber()
-            >>> scrubber.add_sensitive_pair("john_doe", "<hashed_username>")
-        """
-        if not (text and text.strip()):  # Avoid replacing empty substrings
-            return
-
-        if text in self.sensitive_occurrences:
-            return
-
-        self.sensitive_occurrences[text] = placeholder
