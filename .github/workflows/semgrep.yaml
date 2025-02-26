@@ -28,6 +28,7 @@ jobs:
                   ${{ steps.changed-files.outputs.all_changed_files }} \
                   > results.json
 
-      - name: Parse Semgrep results and create annotations
-        if: steps.changed-files.outputs.any_changed == 'true'
-        run: python .github/scripts/parse_semgrep.py results.json --fail-on ERROR
+      - uses: drew2a/annotate-semgrep-action@v1
+        with:
+          json_path: "results.json"
+          fail_on: "ERROR,WARNING"
