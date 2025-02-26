@@ -1,7 +1,7 @@
 import pytest
 
-from utils import delete_item, distinct_by, extract_dict, get_first_item, get_last_item, get_value, modify_value, \
-    obfuscate_string, order_by_utc_time
+from utils import delete_item, distinct_by, extract_dict, get_first_item, get_last_item, get_value, \
+    modify_value, order_by_utc_time
 
 
 def test_first():
@@ -116,11 +116,6 @@ OBFUSCATED_STRINGS = [
     ('any', 'challenge'),
     ('string', 'quality'),
 ]
-
-
-@pytest.mark.parametrize('given, expected', OBFUSCATED_STRINGS)
-def test_obfuscate_string(given, expected):
-    assert obfuscate_string(given) == expected
 
 
 def test_order_by_utc_time():

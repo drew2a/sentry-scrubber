@@ -36,13 +36,13 @@ FOLDERS_NEGATIVE_MATCH = [
 @pytest.mark.parametrize('folder', FOLDERS_NEGATIVE_MATCH)
 def test_patterns_folders_negative_match(folder: str, scrubber: SentryScrubber):
     """ Test that the scrubber does not match folders """
-    assert not any(regex.search(folder) for regex in scrubber.re_folders)
+    assert not any(regex.search(folder) for regex in scrubber._re_folders)
 
 
 @pytest.mark.parametrize('folder', FOLDERS_POSITIVE_MATCH)
 def test_patterns_folders_positive_match(folder: str, scrubber: SentryScrubber):
     """ Test that the scrubber matches folders """
-    assert any(regex.search(folder) for regex in scrubber.re_folders)
+    assert any(regex.search(folder) for regex in scrubber._re_folders)
 
 
 IP_POSITIVE_MATCH = [
@@ -66,13 +66,13 @@ IP_NEGATIVE_MATCH = [
 @pytest.mark.parametrize('ip', IP_NEGATIVE_MATCH)
 def test_patterns_ip_negative_match(ip: str, scrubber: SentryScrubber):
     """ Test that the scrubber does not match IPs """
-    assert not scrubber.re_ip.search(ip)
+    assert not scrubber._re_ip.search(ip)
 
 
 @pytest.mark.parametrize('ip', IP_POSITIVE_MATCH)
 def test_patterns_ip_positive_match(ip: str, scrubber: SentryScrubber):
     """ Test that the scrubber matches IPs """
-    assert scrubber.re_ip.search(ip)
+    assert scrubber._re_ip.search(ip)
 
 
 HASH_POSITIVE_MATCH = [
@@ -91,21 +91,22 @@ HASH_NEGATIVE_MATCH = [
 @pytest.mark.parametrize('h', HASH_NEGATIVE_MATCH)
 def test_patterns_hash_negative_match(h: str, scrubber: SentryScrubber):
     """ Test that the scrubber does not match hashes """
-    assert not scrubber.re_hash.search(h)
+    assert not scrubber._re_hash.search(h)
 
 
 @pytest.mark.parametrize('h', HASH_POSITIVE_MATCH)
 def test_patterns_hash_positive_match(h: str, scrubber: SentryScrubber):
     """ Test that the scrubber scrub hashes """
-    assert scrubber.re_hash.search(h)
+    assert scrubber._re_hash.search(h)
 
 
 def test_scrub_path_negative_match(scrubber: SentryScrubber):
     """ Test that the scrubber does not scrub paths """
-    assert scrubber.scrub_text('/usr/local/path/') == '/usr/local/path/'
-    assert scrubber.scrub_text('some text') == 'some text'
+    sensitive_occurrences = set()
+    assert scrubber.scrub_text('/usr/local/path/', sensitive_occurrences) == '/usr/local/path/'
+    assert scrubber.scrub_text('some text', sensitive_occurrences) == 'some text'
 
-    assert not scrubber.sensitive_occurrences
+    assert not sensitive_occurrences
 
 
 def test_dict_markers_to_scrub(scrubber: SentryScrubber):
@@ -130,7 +131,7 @@ def test_dict_markers_to_scrub(scrubber: SentryScrubber):
             'information': 'but not secret',
             'just contains': 'top secret'
         },
-        'secret information': {}
+        'secret information': '<redacted>'
     }
 
     assert actual == expected
@@ -138,41 +139,52 @@ def test_dict_markers_to_scrub(scrubber: SentryScrubber):
 
 def test_scrub_path_positive_match(scrubber: SentryScrubber):
     """ Test that the scrubber scrubs paths """
-    assert scrubber.scrub_text('/users/user/apps') == '/users/<boot>/apps'
-    assert 'user' in scrubber.sensitive_occurrences
+    sensitive_occurrences = set()
+    assert scrubber.scrub_text('/users/user/apps', sensitive_occurrences) == '/users/<redacted>/apps'
+    assert 'user' in sensitive_occurrences
 
-    assert scrubber.scrub_text('/users/username/some/long_path') == '/users/<highlight>/some/long_path'
-    assert 'username' in scrubber.sensitive_occurrences
+    assert scrubber.scrub_text('/users/username/some/long_path',
+                               sensitive_occurrences) == '/users/<redacted>/some/long_path'
+    assert 'username' in sensitive_occurrences
 
 
 def test_scrub_text_ip_negative_match(scrubber: SentryScrubber):
     """ Test that the scrubber does not scrub IPs """
-    assert scrubber.scrub_text('127.0.0.1') == '127.0.0.1'
-    assert scrubber.scrub_text('0.0.0') == '0.0.0'
+    sensitive_occurrences = set()
+
+    assert scrubber.scrub_text('127.0.0.1', sensitive_occurrences) == '127.0.0.1'
+    assert scrubber.scrub_text('0.0.0', sensitive_occurrences) == '0.0.0'
+    assert not sensitive_occurrences
 
 
 def test_scrub_text_ip_positive_match(scrubber: SentryScrubber):
     """ Test that the scrubber scrubs IPs """
-    assert scrubber.scrub_text('0.0.0.1') == '<IP>'
-    assert scrubber.scrub_text('0.100.0.1') == '<IP>'
+    sensitive_occurrences = set()
 
-    assert not scrubber.sensitive_occurrences
+    assert scrubber.scrub_text('0.0.0.1', sensitive_occurrences) == '<redacted>'
+    assert scrubber.scrub_text('0.100.0.1', sensitive_occurrences) == '<redacted>'
+
+    assert not sensitive_occurrences
 
 
 def test_scrub_text_hash_negative_match(scrubber: SentryScrubber):
     """ Test that the scrubber does not scrub hashes """
+    sensitive_occurrences = set()
+
     too_long_hash = '1' * 41
-    assert scrubber.scrub_text(too_long_hash) == too_long_hash
+    assert scrubber.scrub_text(too_long_hash, sensitive_occurrences) == too_long_hash
     too_short_hash = '2' * 39
-    assert scrubber.scrub_text(too_short_hash) == too_short_hash
+    assert scrubber.scrub_text(too_short_hash, sensitive_occurrences) == too_short_hash
 
 
 def test_scrub_text_hash_positive_match(scrubber: SentryScrubber):
     """ Test that the scrubber scrubs hashes """
-    assert scrubber.scrub_text('3' * 40) == '<hash>'
-    assert scrubber.scrub_text('hash:' + '4' * 40) == 'hash:<hash>'
+    sensitive_occurrences = set()
 
-    assert not scrubber.sensitive_occurrences
+    assert scrubber.scrub_text('3' * 40, sensitive_occurrences) == '<redacted>'
+    assert scrubber.scrub_text('hash:' + '4' * 40, sensitive_occurrences) == 'hash:<redacted>'
+
+    assert not sensitive_occurrences
 
 
 def test_scrub_text_complex_string(scrubber):
@@ -183,26 +195,27 @@ def test_scrub_text_complex_string(scrubber):
         'located at usr/someuser/path on '
         "someuser's machine(someuser_with_postfix)"
     )
+    sensitive_occurrences = set()
 
-    actual = scrubber.scrub_text(source)
+    actual = scrubber.scrub_text(source, sensitive_occurrences)
 
     assert actual == ('this is a string that has been sent from '
-                      '<IP>(<hash>) '
-                      'located at usr/<effect>/path on '
-                      "<effect>'s machine(someuser_with_postfix)")
+                      '<redacted>(<redacted>) '
+                      'located at usr/<redacted>/path on '
+                      "<redacted>'s machine(someuser_with_postfix)")
 
-    assert 'someuser' in scrubber.sensitive_occurrences
-    assert scrubber.scrub_text('someuser') == '<effect>'
+    assert 'someuser' in sensitive_occurrences
+    assert scrubber.scrub_text('someuser', sensitive_occurrences) == '<redacted>'
 
 
-def test_scrub_simple_event(scrubber):
+def test_scrub_simple_event(scrubber: SentryScrubber):
     """ Test that the scrubber scrubs simple events """
     assert scrubber.scrub_event(None) is None
     assert scrubber.scrub_event({}) == {}
     assert scrubber.scrub_event({'some': 'field'}) == {'some': 'field'}
 
 
-def test_scrub_event(scrubber):
+def test_scrub_event(scrubber: SentryScrubber):
     """ Test that the scrubber scrubs events """
     event = {
         'the very first item': 'username',
@@ -222,7 +235,8 @@ def test_scrub_event(scrubber):
                     'File "/Users/username/Tribler/tribler/src/tribler-gui/tribler_gui/"',
                 ],
                 'sysinfo': {'sys.path': ['/Users/username/Tribler/', '/Users/username/', '.']},
-            }
+            },
+            'tuple': ('tuple', 'data'),
         },
         'extra': {'sys_argv': ['/Users/username/Tribler']},
         'logentry': {'message': 'Exception with username', 'params': ['Traceback File: /Users/username/Tribler/']},
@@ -234,44 +248,45 @@ def test_scrub_event(scrubber):
         },
     }
     assert scrubber.scrub_event(event) == {
-        'the very first item': '<highlight>',
-        'server_name': '<kid>',
+        'the very first item': '<redacted>',
+        'server_name': '<redacted>',
         'contexts': {
             'reporter': {
                 'any': {
-                    'USERNAME': '<conference>',
-                    'USERDOMAIN_ROAMINGPROFILE': '<protection>',
-                    'PATH': '/users/<highlight>/apps',
-                    'TMP_WIN': 'C:\\Users\\<restaurant>\\AppData\\Local\\Temp',
-                    'USERDOMAIN': '<tune>',
-                    'COMPUTERNAME': '<lady>',
+                    'USERNAME': '<redacted>',
+                    'USERDOMAIN_ROAMINGPROFILE': '<redacted>',
+                    'PATH': '/users/<redacted>/apps',
+                    'TMP_WIN': 'C:\\Users\\<redacted>\\AppData\\Local\\Temp',
+                    'USERDOMAIN': '<redacted>',
+                    'COMPUTERNAME': '<redacted>',
                 },
                 'stacktrace': [
                     'Traceback (most recent call last):',
-                    'File "/Users/<highlight>/Tribler/tribler/src/tribler-gui/tribler_gui/"',
+                    'File "/Users/<redacted>/Tribler/tribler/src/tribler-gui/tribler_gui/"',
                 ],
                 'sysinfo': {
                     'sys.path': [
-                        '/Users/<highlight>/Tribler/',
-                        '/Users/<highlight>/',
+                        '/Users/<redacted>/Tribler/',
+                        '/Users/<redacted>/',
                         '.',
                     ]
                 },
             },
+            'tuple': ('tuple', 'data'),
         },
         'logentry': {
-            'message': 'Exception with <highlight>',
-            'params': ['Traceback File: /Users/<highlight>/Tribler/'],
+            'message': 'Exception with <redacted>',
+            'params': ['Traceback File: /Users/<redacted>/Tribler/'],
         },
-        'extra': {'sys_argv': ['/Users/<highlight>/Tribler']},
+        'extra': {'sys_argv': ['/Users/<redacted>/Tribler']},
         'breadcrumbs': {
             'values': [
                 {
                     'type': 'log',
-                    'message': 'Traceback File: /Users/<highlight>/Tribler/',
+                    'message': 'Traceback File: /Users/<redacted>/Tribler/',
                     'timestamp': '1',
                 },
-                {'type': 'log', 'message': 'IP: <IP>', 'timestamp': '2'},
+                {'type': 'log', 'message': 'IP: <redacted>', 'timestamp': '2'},
             ]
         },
     }
@@ -279,13 +294,14 @@ def test_scrub_event(scrubber):
 
 def test_entities_recursively(scrubber):
     """ Test that the scrubber scrubs entities recursively """
+    sensitive_strings = set()
 
     # positive
-    assert scrubber.scrub_entity_recursively(None) is None
-    assert scrubber.scrub_entity_recursively({}) == {}
-    assert scrubber.scrub_entity_recursively([]) == []
-    assert scrubber.scrub_entity_recursively('') == ''
-    assert scrubber.scrub_entity_recursively(42) == 42
+    assert scrubber.scrub_entity_recursively(None, sensitive_strings) is None
+    assert scrubber.scrub_entity_recursively({}, sensitive_strings) == {}
+    assert scrubber.scrub_entity_recursively([], sensitive_strings) == []
+    assert scrubber.scrub_entity_recursively('', sensitive_strings) == ''
+    assert scrubber.scrub_entity_recursively(42, sensitive_strings) == 42
 
     event = {
         'some': {
@@ -296,12 +312,12 @@ def test_entities_recursively(scrubber):
             ]
         }
     }
-    assert scrubber.scrub_entity_recursively(event) == {
-        'some': {'value': [{'path': '/Users/<highlight>/Tribler'}]}
+    assert scrubber.scrub_entity_recursively(event, sensitive_strings) == {
+        'some': {'value': [{'path': '/Users/<redacted>/Tribler'}]}
     }
     # stop on depth
-    assert scrubber.scrub_entity_recursively(event) != event
-    assert scrubber.scrub_entity_recursively(event, depth=2) == event
+    assert scrubber.scrub_entity_recursively(event, sensitive_strings) != event
+    assert scrubber.scrub_entity_recursively(event, sensitive_strings, depth=2) == event
 
 
 def test_scrub_unnecessary_fields(scrubber):
@@ -316,32 +332,71 @@ def test_scrub_unnecessary_fields(scrubber):
 
 
 def test_scrub_text_none(scrubber):
-    assert scrubber.scrub_text(None) is None
+    sensitive_occurrences = set()
+
+    assert scrubber.scrub_text(None, sensitive_occurrences) is None
 
 
-def test_scrub_dict(scrubber):
-    assert scrubber.scrub_entity_recursively(None) is None
-    assert scrubber.scrub_entity_recursively({}) == {}
+def test_scrub_entity_none(scrubber):
+    sensitive_string = set()
 
-    assert scrubber.scrub_entity_recursively({'key': [1]}) == {'key': [1]}  # non-string values should not lead to error
+    assert scrubber.scrub_entity_recursively(None, sensitive_string) is None
 
-    given = {'PATH': '/home/username/some/', 'USERDOMAIN': 'UD', 'USERNAME': 'U', 'REPEATED': 'user username UD U',
-             'key': ''}
-    assert scrubber.scrub_entity_recursively(given) == {'PATH': '/home/<highlight>/some/',
-                                                        'REPEATED': 'user <highlight> <school> <night>',
-                                                        'USERDOMAIN': '<school>',
-                                                        'USERNAME': '<night>',
-                                                        'key': '<dress>'}
 
-    assert 'username' in scrubber.sensitive_occurrences
-    assert 'UD' in scrubber.sensitive_occurrences
-    assert 'U' in scrubber.sensitive_occurrences
-    assert '' not in scrubber.sensitive_occurrences
+def test_scrub_entity_empty_dict(scrubber):
+    sensitive_string = set()
+
+    assert scrubber.scrub_entity_recursively({}, sensitive_string) == {}
+
+
+@pytest.mark.parametrize("sensitive_value", [
+    [1],
+    {'some': 'value'},
+    ('some', 'value')
+])
+def test_scrub_entity_with_complex_structure(sensitive_value, scrubber):
+    """ Test that the scrubber scrubs entities with complex structures """
+    event = {'key': sensitive_value}
+    scrubber.dict_keys_for_scrub = {'key'}
+
+    sensitive_string = set()
+
+    actual = scrubber.scrub_entity_recursively(event, sensitive_string)
+    assert actual == {'key': '<redacted>'}
+
+
+def test_scrub_entity_given_dict(scrubber):
+    given = {
+        'PATH': '/home/username/some/',
+        'USERDOMAIN': 'UD',
+        'USERNAME': 'U',
+        'REPEATED': 'user username UD U',
+        'key': ''
+    }
+    sensitive_string = set()
+
+    actual = scrubber.scrub_entity_recursively(given, sensitive_string)
+    expected = {
+        'PATH': '/home/<redacted>/some/',
+        'REPEATED': 'user <redacted> <redacted> <redacted>',
+        'USERDOMAIN': '<redacted>',
+        'USERNAME': '<redacted>',
+        'key': ''
+    }
+    assert actual == expected
+
+    assert 'username' in sensitive_string
+    assert 'UD' in sensitive_string
+    assert 'U' in sensitive_string
+    assert '' not in sensitive_string
 
 
 def test_scrub_list(scrubber):
-    assert scrubber.scrub_entity_recursively(None) is None
-    assert scrubber.scrub_entity_recursively([]) == []
+    sensitive_string = set()
 
-    assert scrubber.scrub_entity_recursively(['/home/username/some/']) == ['/home/<highlight>/some/']
-    assert 'username' in scrubber.sensitive_occurrences
+    assert scrubber.scrub_entity_recursively(None, sensitive_string) is None
+    assert scrubber.scrub_entity_recursively([], sensitive_string) == []
+
+    actual = scrubber.scrub_entity_recursively(['/home/username/some/'], sensitive_string)
+    assert actual == ['/home/<redacted>/some/']
+    assert 'username' in sensitive_string
