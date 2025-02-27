@@ -233,11 +233,9 @@ class SentryScrubber:
                     result[key] = value
                     continue
 
-                if marker_value := self.dict_markers_to_scrub.get(key):
-                    should_be_scrubbed = value == marker_value
-                    if should_be_scrubbed:
-                        result = self.placeholder
-                        break
+                if self._is_dict_should_be_scrubbed(key, value):
+                    result = self.placeholder
+                    break
 
                 if key in self.dict_keys_for_scrub:
                     if isinstance(value, str):
@@ -255,3 +253,12 @@ class SentryScrubber:
             return tuple(self.scrub_entity_recursively(item, sensitive_strings, depth) for item in entity)
 
         return entity
+
+    def _is_dict_should_be_scrubbed(self, key: str, value: Any):
+        if marker_value := self.dict_markers_to_scrub.get(key):
+            should_be_scrubbed = value == marker_value
+            if should_be_scrubbed:
+                return True
+            if isinstance(marker_value, (list, tuple, set)):
+                return value in marker_value
+        return False

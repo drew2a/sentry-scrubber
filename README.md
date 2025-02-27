@@ -133,7 +133,10 @@ from sentry_scrubber.scrubber import SentryScrubber
 
 # Define markers that indicate sections to be removed
 dict_markers = {
-    'visibility': 'private'
+    'visibility': 'private',
+    'status': ['error', 'failure'],  # List of values to match
+    'level': ('warning', 'critical'),  # Tuple of values to match
+    'environment': {'staging', 'production'}  # Set of values to match
 }
 
 scrubber = SentryScrubber(dict_markers_to_scrub=dict_markers)
@@ -144,11 +147,15 @@ event = {
     'private_section': {
         'visibility': 'private',  # This will cause the entire 'private_section' to be redacted
         'secret_data': 'sensitive information'
+    },
+    'error_section': {
+        'status': 'error',  # This will cause the entire 'error_section' to be redacted
+        'details': 'Error details'
     }
 }
 
 scrubbed = scrubber.scrub_event(event)
-# Result: {'public_info': 'This is public', 'private_section': '<redacted>'}
+# Result: {'public_info': 'This is public', 'private_section': '<redacted>', 'error_section': '<redacted>'}
 ```
 
 ### Exclusions

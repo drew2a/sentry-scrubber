@@ -426,3 +426,48 @@ def test_scrub_list(scrubber):
     actual = scrubber.scrub_entity_recursively(['/home/username/some/'], sensitive_string)
     assert actual == ['/home/<redacted>/some/']
     assert 'username' in sensitive_string
+
+
+@pytest.mark.parametrize(
+    "key, value, dict_markers_to_scrub, expected",
+    [
+        # Test case 1: Key not in dict_markers_to_scrub
+        ("unknown_key", "value", {}, False),
+
+        # Test case 2: Key in dict_markers_to_scrub, value matches exactly
+        ("api_key", "secret123", {"api_key": "secret123"}, True),
+
+        # Test case 3: Key in dict_markers_to_scrub, value doesn't match
+        ("api_key", "different_value", {"api_key": "secret123"}, False),
+
+        # Test case 4: Key in dict_markers_to_scrub, value in list of marker values
+        ("status", "error", {"status": ["error", "failure"]}, True),
+
+        # Test case 5: Key in dict_markers_to_scrub, value not in list of marker values
+        ("status", "success", {"status": ["error", "failure"]}, False),
+
+        # Test case 6: Key in dict_markers_to_scrub, value in tuple of marker values
+        ("level", "critical", {"level": ("warning", "critical")}, True),
+
+        # Test case 7: Key in dict_markers_to_scrub, value in set of marker values
+        ("environment", "production", {"environment": {"staging", "production"}}, True),
+    ],
+)
+def test_is_dict_should_be_scrubbed(key, value, dict_markers_to_scrub, expected):
+    """Test the _is_dict_should_be_scrubbed method with various inputs."""
+    scrubber = SentryScrubber(dict_markers_to_scrub=dict_markers_to_scrub)
+    result = scrubber._is_dict_should_be_scrubbed(key, value)
+    assert result == expected
+
+
+def test_is_dict_should_be_scrubbed_with_empty_markers():
+    """Test the method with empty dict_markers_to_scrub."""
+    scrubber = SentryScrubber()
+    assert not scrubber._is_dict_should_be_scrubbed("any_key", "any_value")
+
+
+def test_is_dict_should_be_scrubbed_with_none_value():
+    """Test the method with None value."""
+    scrubber = SentryScrubber(dict_markers_to_scrub={"key": None})
+    assert not scrubber._is_dict_should_be_scrubbed("key", None)
+    assert not scrubber._is_dict_should_be_scrubbed("key", "not_none")
