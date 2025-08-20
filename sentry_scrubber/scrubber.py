@@ -100,13 +100,15 @@ class SentryScrubber:
         if self.scrub_hash:
             self._re_hash = re.compile(r'\b[0-9a-f]{40}\b', re.I)
 
-    def scrub_event(self, event: Optional[Dict[str, Any]], _=None) -> Optional[Dict[str, Any]]:
+    def scrub_event(self, event: Optional[Dict[str, Any]], _=None, sensitive_strings: Set[str] = None) \
+            -> Optional[Dict[str, Any]]:
         """
         Main method to scrub a Sentry event by removing sensitive and unnecessary information.
 
         Args:
             event (dict): A Sentry event represented as a dictionary.
-            _ (Any, optional): Unused parameter for compatibility. Defaults to None.
+            _ (Any, optional): Hint. Unused parameter for compatibility. Defaults to None.
+            sensitive_strings (set): A set contains all sensitive strings. Defaults to None.
 
         Returns:
             dict: The scrubbed Sentry event.
@@ -123,13 +125,15 @@ class SentryScrubber:
             delete_item(event, field_name)
 
         # remove sensitive information
-        sensitive_strings = set(self.sensitive_strings)
+        initial_sensitive_strings = set(self.sensitive_strings)
+        if sensitive_strings:
+            initial_sensitive_strings.update(sensitive_strings)
 
-        scrubbed_event = self.scrub_entity_recursively(event, sensitive_strings)
+        scrubbed_event = self.scrub_entity_recursively(event, initial_sensitive_strings)
 
         # this second call is necessary to complete the entities scrubbing
         # which were found at the end of the previous call
-        scrubbed_event = self.scrub_entity_recursively(scrubbed_event, sensitive_strings)
+        scrubbed_event = self.scrub_entity_recursively(scrubbed_event, initial_sensitive_strings)
 
         return scrubbed_event
 
