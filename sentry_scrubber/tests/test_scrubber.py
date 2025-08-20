@@ -471,3 +471,15 @@ def test_is_dict_should_be_scrubbed_with_none_value():
     scrubber = SentryScrubber(dict_markers_to_scrub={"key": None})
     assert not scrubber._is_dict_should_be_scrubbed("key", None)
     assert not scrubber._is_dict_should_be_scrubbed("key", "not_none")
+
+
+def test_scrub_with_hint(scrubber: SentryScrubber):
+    """ Test that the scrubber does not break if hint is provided"""
+    actual = scrubber.scrub_event({'any': 'value'}, {})
+    assert actual == {'any': 'value'}
+
+
+def test_scrub_with_sensitive_strings(scrubber: SentryScrubber):
+    """ Test that the scrubber does not break if sensitive_strings is provided"""
+    actual = scrubber.scrub_event({'any': 'value'}, {}, {'value'})
+    assert actual == {'any': scrubber.placeholder}
