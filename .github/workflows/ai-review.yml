@@ -6,15 +6,13 @@ jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: drew2a/ai-review@v1
+      - uses: drew2a/ai-review@v2
+        env:
+          LLM_MODEL: ${{ secrets.ANTHROPIC_LLM_MODEL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_LLM_API_KEY }}
         with:
-          api_endpoint: ${{ secrets.ANTHROPIC_LLM_ENDPOINT }}
-          api_key: ${{ secrets.ANTHROPIC_LLM_API_KEY }}
-          api_version: ${{ secrets.ANTHROPIC_LLM_API_VERSION }}
-          llm_model: ${{ secrets.ANTHROPIC_LLM_MODEL }}
-
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
           add_review_resolution: true
