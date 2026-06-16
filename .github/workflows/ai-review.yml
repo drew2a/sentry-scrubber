@@ -4,15 +4,19 @@ permissions:
   pull-requests: write
 jobs:
   review:
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - uses: drew2a/ai-review@v2
         env:
-          LLM_MODEL: ${{ secrets.ANTHROPIC_LLM_MODEL }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_LLM_API_KEY }}
+          LLM_MODEL: gemini/gemini-2.5-flash
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-
-          add_review_resolution: true
+          debug: true
+          add_review_resolution: false
+          add_joke: true
+          author_customization: |
+            drew2a: "Write comments on behalf of The Oracle from The Matrix film. Use cryptic wisdom, speak about choices and paths, offer guidance in a philosophical manner, and occasionally reference concepts like destiny, the Matrix, and seeing beyond the code."
