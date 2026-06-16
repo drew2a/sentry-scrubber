@@ -1,31 +1,37 @@
-[tool.poetry]
+[project]
 name = "sentry-scrubber"
 version = "2.3.0"
 description = "A lightweight and flexible Python library for scrubbing sensitive information from Sentry events before they are sent to the server."
-authors = ["Andrei Andreev"]
+authors = [{name = "Andrei Andreev"}]
 readme = "README.md"
-license = "MIT"
-homepage = "https://github.com/drew2a/sentry-scrubber"
+license = {text = "MIT"}
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-documentation = "https://github.com/drew2a/sentry-scrubber/blob/main/README.md"
+
+[project.urls]
+Homepage = "https://github.com/drew2a/sentry-scrubber"
+Documentation = "https://github.com/drew2a/sentry-scrubber/blob/main/README.md"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.0",
+    "pytest-cov>=6.0.0",
+    "diff-cover>=9.2.1",
+    "ruff>=0.8.4",
+]
 
 [tool.pytest.ini_options]
 pythonpath = [
     "sentry_scrubber", "."
 ]
-
-[tool.poetry.dependencies]
-python = "^3.9.17"
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.3.3"
-pytest-cov = "^6.0.0"
-diff-cover = "^9.2.1"
-ruff = "^0.8.4"
 
 [tool.ruff]
 extend = "./ruff.toml"
