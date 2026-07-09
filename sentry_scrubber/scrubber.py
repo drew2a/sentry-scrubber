@@ -7,10 +7,6 @@ T = TypeVar('T')
 
 DEFAULT_EXCLUSIONS = {'local', '127.0.0.1'}
 
-# lines of a multiline occurrence shorter than this are not scrubbed individually
-# to avoid redacting the whole event because of a few common characters
-MIN_OCCURRENCE_LINE_LENGTH = 4
-
 DEFAULT_KEYS_FOR_SCRUB = {'USERNAME', 'USERDOMAIN', 'server_name', 'COMPUTERNAME'}
 
 # https://en.wikipedia.org/wiki/Home_directory
@@ -194,28 +190,14 @@ class SentryScrubber:
                 suffix = r'\b' if re.search(r'\w$', occurrence) else ''
                 return prefix + re.escape(occurrence) + suffix
 
-            expanded_occurrences = set()
-            for occurrence in sensitive_occurrences:
-                # an occurrence that is a part of the placeholder would corrupt
-                # placeholders already inserted by a previous scrubbing pass
-                if occurrence.lower() in self.placeholder.lower():
-                    continue
-                expanded_occurrences.add(occurrence)
+            # an occurrence that is a part of the placeholder would corrupt
+            # placeholders already inserted by a previous scrubbing pass
+            safe_occurrences = {occurrence for occurrence in sensitive_occurrences
+                                if occurrence.lower() not in self.placeholder.lower()}
 
-                # a multiline occurrence can appear reformatted in the event
-                # (\r\n line endings, log prefixes, partial output), so its
-                # individual lines are scrubbed as well
-                lines = occurrence.splitlines()
-                if len(lines) > 1:
-                    for line in lines:
-                        line = line.strip()
-                        if len(line) >= MIN_OCCURRENCE_LINE_LENGTH \
-                                and line.lower() not in self.placeholder.lower():
-                            expanded_occurrences.add(line)
-
-            if expanded_occurrences:
+            if safe_occurrences:
                 # longest first, so an occurrence that contains another one wins
-                ordered_occurrences = sorted(expanded_occurrences, key=len, reverse=True)
+                ordered_occurrences = sorted(safe_occurrences, key=len, reverse=True)
                 pattern = '|'.join(map(add_boundaries, ordered_occurrences))
                 text = re.sub(pattern, lambda _: self.placeholder, text, flags=re.IGNORECASE)
 

@@ -285,28 +285,6 @@ def test_scrub_text_occurrence_case_insensitive(scrubber: SentryScrubber):
     assert scrubber.scrub_text('error for user JOHN', sensitive_occurrences) == 'error for user <redacted>'
 
 
-def test_scrub_text_multiline_occurrence_reformatted(scrubber: SentryScrubber):
-    """ Test that lines of a multiline occurrence are scrubbed even when the text is reformatted """
-    secret = '-----BEGIN KEY-----\nMIIEvQIBADANBg\n-----END KEY-----'
-    sensitive_occurrences = {secret}
-
-    # \r\n instead of \n
-    crlf = secret.replace('\n', '\r\n')
-    assert scrubber.scrub_text(crlf, sensitive_occurrences) == '<redacted>\r\n<redacted>\r\n<redacted>'
-
-    # a log prefix on every line
-    prefixed = 'log: -----BEGIN KEY-----\nlog: MIIEvQIBADANBg\nlog: -----END KEY-----'
-    assert scrubber.scrub_text(prefixed, sensitive_occurrences) == 'log: <redacted>\nlog: <redacted>\nlog: <redacted>'
-
-
-def test_scrub_text_short_lines_of_multiline_occurrence_ignored(scrubber: SentryScrubber):
-    """ Test that too short lines of a multiline occurrence are not scrubbed individually """
-    secret = 'long_enough_secret\nno\n-\n'
-    scrubbed = scrubber.scrub_text('value: long_enough_secret, also no and - here', {secret})
-
-    assert scrubbed == 'value: <redacted>, also no and - here'
-
-
 def test_scrub_text_placeholder_never_corrupted(scrubber: SentryScrubber):
     """ Test that an occurrence matching a part of the placeholder does not corrupt scrubbed text """
     text = scrubber.scrub_text('user redacted logged in from /users/redacted/app', set())
