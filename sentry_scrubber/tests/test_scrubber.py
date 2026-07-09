@@ -266,6 +266,55 @@ def test_scrub_text_multiline_occurrence_starting_with_dash(scrubber: SentryScru
     assert actual == 'error while loading key:\n<redacted>\ndone'
 
 
+def test_scrub_text_occurrence_after_angle_bracket(scrubber: SentryScrubber):
+    """ Test that an occurrence immediately preceded by '<' is scrubbed """
+    assert scrubber.scrub_text('User <john@corp> logged in', {'john@corp'}) == 'User <<redacted>> logged in'
+
+
+def test_scrub_text_adjacent_occurrences(scrubber: SentryScrubber):
+    """ Test that back-to-back occurrences are all scrubbed in a single pass """
+    assert scrubber.scrub_text('key: -abc-abc', {'-abc'}) == 'key: <redacted><redacted>'
+
+
+def test_scrub_text_occurrence_case_insensitive(scrubber: SentryScrubber):
+    """ Test that occurrences are scrubbed regardless of their case """
+    sensitive_occurrences = set()
+    assert scrubber.scrub_text(r'C:\Users\John\file', sensitive_occurrences) == r'C:\Users\<redacted>\file'
+    assert 'John' in sensitive_occurrences
+
+    assert scrubber.scrub_text('error for user JOHN', sensitive_occurrences) == 'error for user <redacted>'
+
+
+def test_scrub_text_multiline_occurrence_reformatted(scrubber: SentryScrubber):
+    """ Test that lines of a multiline occurrence are scrubbed even when the text is reformatted """
+    secret = '-----BEGIN KEY-----\nMIIEvQIBADANBg\n-----END KEY-----'
+    sensitive_occurrences = {secret}
+
+    # \r\n instead of \n
+    crlf = secret.replace('\n', '\r\n')
+    assert scrubber.scrub_text(crlf, sensitive_occurrences) == '<redacted>\r\n<redacted>\r\n<redacted>'
+
+    # a log prefix on every line
+    prefixed = 'log: -----BEGIN KEY-----\nlog: MIIEvQIBADANBg\nlog: -----END KEY-----'
+    assert scrubber.scrub_text(prefixed, sensitive_occurrences) == 'log: <redacted>\nlog: <redacted>\nlog: <redacted>'
+
+
+def test_scrub_text_short_lines_of_multiline_occurrence_ignored(scrubber: SentryScrubber):
+    """ Test that too short lines of a multiline occurrence are not scrubbed individually """
+    secret = 'long_enough_secret\nno\n-\n'
+    scrubbed = scrubber.scrub_text('value: long_enough_secret, also no and - here', {secret})
+
+    assert scrubbed == 'value: <redacted>, also no and - here'
+
+
+def test_scrub_text_placeholder_never_corrupted(scrubber: SentryScrubber):
+    """ Test that an occurrence matching a part of the placeholder does not corrupt scrubbed text """
+    text = scrubber.scrub_text('user redacted logged in from /users/redacted/app', set())
+
+    # the second pass with 'redacted' as a sensitive occurrence keeps placeholders intact
+    assert scrubber.scrub_text(text, {'redacted'}) == text
+
+
 def test_scrub_simple_event(scrubber: SentryScrubber):
     """ Test that the scrubber scrubs simple events """
     assert scrubber.scrub_event(None) is None
