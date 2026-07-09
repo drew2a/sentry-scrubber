@@ -241,6 +241,21 @@ def test_scrub_text_occurrence_starting_with_dash(scrubber: SentryScrubber):
     assert scrubber.scrub_text('token: -abc123', sensitive_occurrences) == 'token: <redacted>'
 
 
+@pytest.mark.parametrize('occurrence, text, expected', [
+    # word start, non-word end: leading boundary only
+    ('abc123.', 'secret is abc123. done', 'secret is <redacted> done'),
+    ('abc123.', 'secret is abc123.done', 'secret is <redacted>done'),
+    ('abc123.', 'megaabc123. here', 'megaabc123. here'),
+    # non-word start, word end: trailing boundary only
+    ('.hidden_secret', 'file .hidden_secret here', 'file <redacted> here'),
+    # non-word on both ends: no boundaries
+    ('(secret)', 'key (secret) here', 'key <redacted> here'),
+])
+def test_scrub_text_occurrence_with_non_word_edges(scrubber: SentryScrubber, occurrence, text, expected):
+    """ Test boundaries are applied only to the sides of an occurrence that start/end with a word character """
+    assert scrubber.scrub_text(text, {occurrence}) == expected
+
+
 def test_scrub_text_multiline_occurrence_starting_with_dash(scrubber: SentryScrubber):
     """ Test that the scrubber scrubs multiline occurrences that start with '-' (e.g. PEM keys) """
     secret = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg\n-----END PRIVATE KEY-----'
