@@ -234,6 +234,23 @@ def test_scrub_text_complex_string(scrubber):
     assert scrubber.scrub_text('someuser', sensitive_occurrences) == '<redacted>'
 
 
+def test_scrub_text_occurrence_starting_with_dash(scrubber: SentryScrubber):
+    """ Test that the scrubber scrubs occurrences that start with a non-word character like '-' """
+    sensitive_occurrences = {'-abc123'}
+
+    assert scrubber.scrub_text('token: -abc123', sensitive_occurrences) == 'token: <redacted>'
+
+
+def test_scrub_text_multiline_occurrence_starting_with_dash(scrubber: SentryScrubber):
+    """ Test that the scrubber scrubs multiline occurrences that start with '-' (e.g. PEM keys) """
+    secret = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg\n-----END PRIVATE KEY-----'
+    sensitive_occurrences = {secret}
+
+    actual = scrubber.scrub_text(f'error while loading key:\n{secret}\ndone', sensitive_occurrences)
+
+    assert actual == 'error while loading key:\n<redacted>\ndone'
+
+
 def test_scrub_simple_event(scrubber: SentryScrubber):
     """ Test that the scrubber scrubs simple events """
     assert scrubber.scrub_event(None) is None
