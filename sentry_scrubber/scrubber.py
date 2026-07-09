@@ -183,8 +183,16 @@ class SentryScrubber:
 
         # replace all sensitive occurrences in the whole string
         if sensitive_occurrences:
-            escaped_sensitive_occurrences = (re.escape(user_name) for user_name in sensitive_occurrences)
-            pattern = r'([^<]|^)\b(' + '|'.join(escaped_sensitive_occurrences) + r')\b'
+            def add_boundaries(occurrence):
+                # \b can't match next to a non-word character, so only anchor
+                # the sides of the occurrence that start/end with a word character
+                prefix = r'\b' if re.match(r'\w', occurrence) else ''
+                suffix = r'\b' if re.search(r'\w$', occurrence) else ''
+                return prefix + re.escape(occurrence) + suffix
+
+            # longest first, so an occurrence that contains another one wins
+            ordered_occurrences = sorted(sensitive_occurrences, key=len, reverse=True)
+            pattern = r'([^<]|^)(' + '|'.join(map(add_boundaries, ordered_occurrences)) + r')'
 
             def scrub_value(m):
                 if m.group(2) not in sensitive_occurrences:
