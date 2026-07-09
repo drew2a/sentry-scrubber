@@ -190,16 +190,16 @@ class SentryScrubber:
                 suffix = r'\b' if re.search(r'\w$', occurrence) else ''
                 return prefix + re.escape(occurrence) + suffix
 
-            # longest first, so an occurrence that contains another one wins
-            ordered_occurrences = sorted(sensitive_occurrences, key=len, reverse=True)
-            pattern = r'([^<]|^)(' + '|'.join(map(add_boundaries, ordered_occurrences)) + r')'
+            # an occurrence that is a part of the placeholder would corrupt
+            # placeholders already inserted by a previous scrubbing pass
+            safe_occurrences = {occurrence for occurrence in sensitive_occurrences
+                                if occurrence.lower() not in self.placeholder.lower()}
 
-            def scrub_value(m):
-                if m.group(2) not in sensitive_occurrences:
-                    return m.group(0)
-                return m.group(1) + self.placeholder
-
-            text = re.sub(pattern, scrub_value, text)
+            if safe_occurrences:
+                # longest first, so an occurrence that contains another one wins
+                ordered_occurrences = sorted(safe_occurrences, key=len, reverse=True)
+                pattern = '|'.join(map(add_boundaries, ordered_occurrences))
+                text = re.sub(pattern, lambda _: self.placeholder, text, flags=re.IGNORECASE)
 
         return text
 
