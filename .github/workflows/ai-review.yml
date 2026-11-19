@@ -11,8 +11,10 @@ jobs:
 
       - uses: drew2a/ai-review@v2
         env:
-          LLM_MODEL: gemini/gemini-2.5-flash
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Free OpenRouter models come and go: set the LLM_MODEL repository variable to switch
+          # without a commit. Pick a `:free` model that supports structured outputs.
+          LLM_MODEL: ${{ vars.LLM_MODEL || 'openrouter/nvidia/nemotron-3.5-super-vl:free' }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           debug: true
