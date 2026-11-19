@@ -7,9 +7,11 @@ jobs:
     if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: drew2a/ai-review@v2
+      # The v2 tag is moved on purpose by every ai-review release, and the action is the
+      # owner's own, so it stays on the tag instead of a commit hash.
+      - uses: drew2a/ai-review@v2 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
         env:
           # Free OpenRouter models come and go: set the LLM_MODEL repository variable to switch
           # without a commit. Pick a `:free` model that supports structured outputs.
